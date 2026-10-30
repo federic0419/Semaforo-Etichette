@@ -107,6 +107,14 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
 @media (prefers-reduced-motion:no-preference){ .row,.score{transition:background-color .2s,border-color .2s} }
 .btn.big{width:100%;font-size:1.05rem;min-height:52px}
 .pbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.count{font:500 .85rem var(--f-num);color:var(--muted)}
+.svTools{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px}
+.svTools input,.svTools select{font:500 .95rem var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 10px;min-height:42px;min-width:0}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:6px;scrollbar-width:none}
+.chips button{flex:0 0 auto;appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 .82rem var(--f-body);cursor:pointer;white-space:nowrap}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.sv .nm1{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv .sub{display:block;font-weight:400;font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .saveNote{font-size:.85rem;color:var(--g);margin-top:8px;font-weight:700}
 .rvName{grid-column:1/-1}
 .rvOff{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.9rem;background:var(--surface)}
@@ -193,6 +201,7 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       </div>
       <div class="rows" id="rows"></div>
       <p class="tip" id="tip"></p>
+      <button class="btn ghost" id="shareBtn" type="button" style="margin-top:12px;width:100%">📤 Condividi come immagine</button>
     </section>
 
     <section class="card">
@@ -215,6 +224,7 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
           <div class="inrow"><input type="number" id="salt" inputmode="decimal" step="any" min="0">
             <select id="saltUnit" aria-label="Sale o sodio"><option value="salt">sale</option><option value="na">sodio</option></select></div>
         </div>
+        <div class="f full"><label for="cat">Categoria</label><select id="cat"><option value="">— scegli —</option></select></div>
         <div class="f full"><label for="mode">Soglie per zuccheri e sale</label>
           <select id="mode"><option value="video">Video (zuccheri &gt;15 g, sale &gt;1,2 g rossi)</option><option value="uk">Ufficiali UK (zuccheri &gt;22,5 g, sale &gt;1,5 g rossi)</option></select>
         </div>
@@ -232,8 +242,19 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
   </div>
 
   <section class="card">
-    <h2>Prodotti salvati</h2>
+    <h2>Prodotti salvati <span class="count" id="svCount"></span></h2>
+    <div class="svTools">
+      <input type="search" id="svSearch" placeholder="🔍 Cerca" aria-label="Cerca tra i prodotti salvati">
+      <select id="svSort" aria-label="Ordina"><option value="recent">Più recenti</option><option value="best">Voto più alto</option><option value="worst">Voto più basso</option><option value="name">Nome A–Z</option></select>
+    </div>
+    <div class="chips" id="svCats" role="group" aria-label="Filtra per categoria"></div>
     <div class="saved" id="saved"></div>
+    <div class="actions" style="display:grid;grid-template-columns:1fr 1fr">
+      <button class="btn ghost" id="bkExport" type="button">⬇ Esporta backup</button>
+      <button class="btn ghost" id="bkImport" type="button">⬆ Importa backup</button>
+      <input type="file" id="bkFile" accept="application/json,.json,text/plain" hidden>
+    </div>
+    <div class="ex" id="bkNote">Il backup è un file con tutti i prodotti salvati: salvalo su Drive o mandalo a te stesso, e importalo sul telefono nuovo.</div>
   </section>
 
   <section class="card" id="offCard">
@@ -244,7 +265,7 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       <div class="f"><label for="offU">Nome utente</label><input type="text" id="offU" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="non l'email"></div>
       <div class="f"><label for="offP">Password</label><input type="password" id="offP"></div>
       <div class="f full"><button class="btn" id="offSave" type="submit">Collega account</button></div>
-      <div class="ex full">Non hai un account? <a href="https://world.openfoodfacts.org/cgi/user.pl" target="_blank" rel="noopener">Crealo gratis su Open Food Facts</a>. Nome utente e password restano solo su questo telefono e servono solo per inviare i dati.</div>
+      <div class="ex full">Non hai un account? <a href="https://world.openfoodfacts.org/cgi/user.pl" target="_blank" rel="noopener">Crealo gratis su Open Food Facts</a>. Nome utente e password restano solo su questo telefono, la password cifrata nel portachiavi sicuro di Android, e servono solo per inviare i dati.</div>
     </form>
   </section>
 
@@ -287,6 +308,8 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
     drink:{fat:[1.5,8.75],sat:[0.75,2.5],sugar:[2.5,11.25],salt:[0.3,0.75]}
   };
   const NAMES = {fat:"Grassi",sat:"Grassi saturi",sugar:"Zuccheri",salt:"Sale"};
+  const CATS = ["Yogurt e latte","Formaggi","Salumi e carne","Pesce","Pane, cereali e prima colazione","Pasta e riso","Biscotti e dolci","Snack salati","Bevande","Piatti pronti","Frutta, verdura e legumi","Condimenti e salse","Altro"];
+  CATS.forEach(c=>{ const o=document.createElement("option"); o.value=c; o.textContent=c; document.getElementById("cat").appendChild(o); });
   const $ = id => document.getElementById(id);
   const fields = ["name","kcal","fat","sat","carb","sugar","fibre","prot","salt"];
   let type = "food";
@@ -298,7 +321,7 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
   function thText([g,r]){ return "verde ≤ "+fmt(g)+" · rosso > "+fmt(r); }
 
   function read(){
-    const d = {name:$("name").value.trim(), type, mode:$("mode").value};
+    const d = {name:$("name").value.trim(), type, mode:$("mode").value, cat:$("cat").value||""};
     for(const k of ["kcal","fat","sat","carb","sugar","fibre","prot"]) d[k]=num(k);
     let s = num("salt"); if(s!=null && $("saltUnit").value==="na") s = s*2.5; d.salt = s;
     if(currentCode) d.code=currentCode;
@@ -332,8 +355,8 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       sc.innerHTML = s.toLocaleString("it-IT")+"<small>/ 10</small>";
       $("vtitle").textContent = {g:"Va bene",a:"Discreto",r:"Da limitare"}[cls];
       const parts=[]; const c={g:0,a:0,r:0}; Object.values(e.lv).forEach(x=>x&&c[x]++);
-      if(c.g) parts.push(c.g+" verdi"); if(c.a) parts.push(c.a+" arancioni"); if(c.r) parts.push(c.r+" rossi");
-      $("vsub").textContent = parts.join(" · ") + (e.count<4?" · "+(4-e.count)+" valori mancanti":"");
+      if(c.g) parts.push(c.g+(c.g===1?" verde":" verdi")); if(c.a) parts.push(c.a+(c.a===1?" arancione":" arancioni")); if(c.r) parts.push(c.r+(c.r===1?" rosso":" rossi"));
+      $("vsub").textContent = parts.join(" · ") + (e.count<4?" · "+(4-e.count)+(4-e.count===1?" valore mancante":" valori mancanti"):"");
     }
     const unit = d.type==="drink"?"/100 ml":"/100 g";
     let html="";
@@ -377,13 +400,14 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
     $("name").value=d.name||"";
     for(const k of ["kcal","fat","sat","carb","sugar","fibre","prot","salt"]) $(k).value = d[k]==null?"":String(Math.round(d[k]*100)/100);
     $("saltUnit").value="salt"; if(d.mode) $("mode").value=d.mode;
+    $("cat").value = CATS.includes(d.cat) ? d.cat : "";
     setType(d.type==="drink"?"drink":"food");
   }
   // salvati (solo su questo dispositivo). Il prodotto aperto si salva da solo a ogni modifica.
   const KEY="semaforo-etichette-v1";
   let currentId=null, saveTimer=null, currentCode=null, currentOff=null;
   function loadSaved(){ let a=[]; try{ a=JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){} if(!Array.isArray(a)) a=[]; a.forEach((d,i)=>{ if(!d.id) d.id="p"+(Date.now()-i)+"_"+i; }); return a; }
-  function storeSaved(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0,200))); return true; }catch(e){ return false; } }
+  function storeSaved(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0,1000))); return true; }catch(e){ return false; } }
   function defaultName(){ const d=new Date(); return "Prodotto del "+d.toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}); }
   function showSaved(msg){ const n=$("saveNote"); n.textContent=msg; n.hidden=false; $("newBtn").hidden=!currentId; $("save").hidden=!!currentId; }
   function upsert(){
@@ -475,14 +499,39 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
   $("newBtn").onclick=()=>{ newProduct(); fill({type}); $("exNote").hidden=true; window.scrollTo({top:0,behavior:"smooth"}); };
 
   function openSaved(d){ newProduct(); fill(d); currentId=d.id; $("exNote").hidden=true; showSaved("Modifiche salvate automaticamente"); renderSaved(); window.scrollTo({top:0,behavior:"smooth"}); }
+  let svCat="";
   function renderSaved(){
-    const a=loadSaved(), box=$("saved");
-    if(!a.length){ box.innerHTML='<div class="empty">Nessun prodotto salvato. Quando confermi i valori di una foto, il prodotto finisce qui da solo.</div>'; return; }
+    const all=loadSaved(), box=$("saved");
+    $("svCount").textContent = all.length ? "("+all.length+")" : "";
+    // filtri per categoria (solo quelle usate)
+    const counts={}; all.forEach(d=>{ const c=d.cat||"Senza categoria"; counts[c]=(counts[c]||0)+1; });
+    const cb=$("svCats"); cb.innerHTML="";
+    if(all.length){
+      const mk=(val,label)=>{ const b2=document.createElement("button"); b2.type="button"; b2.textContent=label; b2.setAttribute("aria-pressed", String(svCat===val)); b2.onclick=()=>{ svCat=val; renderSaved(); }; cb.appendChild(b2); };
+      mk("", "Tutti "+all.length);
+      CATS.concat(["Senza categoria"]).forEach(c=>{ if(counts[c]) mk(c, c+" "+counts[c]); });
+      if(svCat && !counts[svCat]) svCat="";
+    }
+    cb.hidden = Object.keys(counts).length<2;
+    const q=$("svSearch").value.trim().toLowerCase();
+    let list=all.map(d=>({d, e:evaluate(d)}));
+    if(svCat) list=list.filter(x=>(x.d.cat||"Senza categoria")===svCat);
+    if(q) list=list.filter(x=>(x.d.name||"").toLowerCase().includes(q) || (x.d.code||"").includes(q) || (x.d.cat||"").toLowerCase().includes(q));
+    const sc=x=>x.e.score==null?-1:x.e.score, srt=$("svSort").value;
+    if(srt==="best") list.sort((a2,b2)=>sc(b2)-sc(a2));
+    else if(srt==="worst") list.sort((a2,b2)=>(a2.e.score==null?99:a2.e.score)-(b2.e.score==null?99:b2.e.score));
+    else if(srt==="name") list.sort((a2,b2)=>(a2.d.name||"").localeCompare(b2.d.name||"","it"));
+    else list.sort((a2,b2)=>(b2.d.updated||0)-(a2.d.updated||0));
+    if(!all.length){ box.innerHTML='<div class="empty">Nessun prodotto salvato. Quando confermi i valori di una foto o di un codice a barre, il prodotto finisce qui da solo.</div>'; return; }
+    if(!list.length){ box.innerHTML='<div class="empty">Nessun prodotto corrisponde alla ricerca.</div>'; return; }
     box.innerHTML="";
-    a.forEach(d=>{
-      const e=evaluate(d); const el=document.createElement("div"); el.className="sv";
+    list.forEach(({d,e})=>{
+      const el=document.createElement("div"); el.className="sv";
       const b=document.createElement("button"); b.className="open"; b.type="button";
-      b.textContent=(d.id===currentId?"● ":"")+(d.name||"Senza nome")+(e.score!=null?" · "+(Math.round(e.score*10)/10).toLocaleString("it-IT")+"/10":"");
+      const nmEl=document.createElement("span"); nmEl.className="nm1"; nmEl.textContent=(d.id===currentId?"● ":"")+(d.name||"Senza nome"); b.appendChild(nmEl);
+      const sub=document.createElement("span"); sub.className="sub";
+      sub.textContent=[e.score!=null?(Math.round(e.score*10)/10).toLocaleString("it-IT")+"/10":"", d.cat||""].filter(Boolean).join(" · ");
+      b.appendChild(sub);
       b.onclick=()=>openSaved(d);
       const m=document.createElement("div"); m.className="mini";
       ["fat","sat","sugar","salt"].forEach(k=>{ const i2=document.createElement("i"); if(e.lv[k]) i2.className=e.lv[k]; i2.title=NAMES[k]; m.appendChild(i2); });
@@ -491,6 +540,104 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       el.append(b,m,x); box.appendChild(el);
     });
   }
+  $("svSearch").addEventListener("input", renderSaved);
+  $("svSort").addEventListener("change", ()=>{ try{ localStorage.setItem("semaforo-sort", $("svSort").value); }catch(e){} renderSaved(); });
+  try{ const so=localStorage.getItem("semaforo-sort"); if(so) $("svSort").value=so; }catch(e){}
+
+  // --- condividi come immagine ---
+  function shareCard(){
+    const d=read(), e=evaluate(d);
+    const W=1080, P=64, rowsK=["fat","sat","sugar","salt"];
+    const c=document.createElement("canvas"); c.width=W; c.height=1800;
+    const x=c.getContext("2d");
+    const col={g:"#2e8b4a",a:"#c77a12",r:"#c8382e",n:"#8a958d"}, bg={g:"#e2f3e6",a:"#fbefd9",r:"#fbe3e0",n:"#eceee9"};
+    const font=(w,sz)=>w+" "+sz+"px 'Roboto','Segoe UI',system-ui,sans-serif";
+    x.fillStyle="#f3f5f1"; x.fillRect(0,0,W,c.height);
+    x.fillStyle="#1d4e5f"; x.fillRect(0,0,W,150);
+    // piccolo semaforo come logo
+    [["#c8382e",0],["#eaa84a",1],["#5cc77a",2]].forEach(([cc,i])=>{ x.fillStyle=cc; x.beginPath(); x.arc(P+20+i*44,75,16,0,7); x.fill(); });
+    x.fillStyle="#fff"; x.font=font("800",48); x.textBaseline="middle"; x.fillText("Semaforo Etichette",P+160,77);
+    // nome prodotto (a capo se lungo)
+    let y=230; x.fillStyle="#18241d"; x.font=font("800",58); x.textBaseline="alphabetic";
+    const words=(d.name||"Prodotto").split(/\s+/); let line="", lines=[];
+    words.forEach(w=>{ const t=line?line+" "+w:w; if(x.measureText(t).width>W-2*P && line){ lines.push(line); line=w; } else line=t; }); lines.push(line);
+    lines.slice(0,2).forEach((l,i)=>{ x.fillText(i===1&&lines.length>2? l+"…" : l, P, y+i*68); }); y+= Math.min(2,lines.length)*68 + 10;
+    if(d.cat){ x.fillStyle="#5d6b62"; x.font=font("600",34); x.fillText(d.cat, P, y); y+=30; }
+    // voto
+    y+=40; const s10=e.score==null?null:Math.round(e.score*10)/10, cls=s10==null?"n":s10>=7.5?"g":s10>=4.5?"a":"r";
+    x.fillStyle=bg[cls]; x.beginPath(); x.arc(P+110,y+110,110,0,7); x.fill();
+    x.lineWidth=16; x.strokeStyle=col[cls]; x.beginPath(); x.arc(P+110,y+110,102,0,7); x.stroke();
+    x.fillStyle="#18241d"; x.textAlign="center"; x.font=font("800",86); x.fillText(s10==null?"–":s10.toLocaleString("it-IT"), P+110, y+122);
+    x.font=font("600",30); x.fillStyle="#5d6b62"; x.fillText("su 10", P+110, y+176); x.textAlign="left";
+    x.fillStyle=col[cls]; x.font=font("800",72); x.fillText(s10==null?"Dati mancanti":{g:"Va bene",a:"Discreto",r:"Da limitare"}[cls], P+260, y+100);
+    x.fillStyle="#5d6b62"; x.font=font("500",34); x.fillText(d.type==="drink"?"Valori per 100 ml":"Valori per 100 g", P+262, y+160);
+    y+=270;
+    // righe semaforo
+    const unit=" g";
+    rowsK.forEach(k=>{
+      const l=e.lv[k]||"n";
+      x.fillStyle=bg[l]; roundRect(x,P,y,W-2*P,104,24); x.fill();
+      x.fillStyle=col[l]; x.beginPath(); x.arc(P+52,y+52,20,0,7); x.fill();
+      x.fillStyle="#18241d"; x.font=font("700",42); x.fillText(NAMES[k], P+96, y+66);
+      x.textAlign="right"; x.font=font("800",44); x.fillText(d[k]==null?"–":fmt(d[k])+unit, W-P-30, y+66); x.textAlign="left";
+      y+=120;
+    });
+    // altri valori
+    const extra=[["Energia",d.kcal,"kcal"],["Carboidrati",d.carb,"g"],["Fibre",d.fibre,"g"],["Proteine",d.prot,"g"]].filter(r=>r[1]!=null);
+    if(extra.length){
+      x.fillStyle="#5d6b62"; x.font=font("500",34);
+      let ln=""; const parts=extra.map(r=>r[0]+" "+fmt(r[1])+" "+r[2]);
+      parts.forEach(t=>{ const tt=ln?ln+"  ·  "+t:t; if(x.measureText(tt).width>W-2*P && ln){ x.fillText(ln,P,y+40); y+=48; ln=t; } else ln=tt; });
+      if(ln){ x.fillText(ln,P,y+40); y+=48; }
+    }
+    y+=40; x.fillStyle="#8a958d"; x.font=font("500",28); x.fillText("Soglie a semaforo per 100 g · non è un consiglio medico", P, y+20);
+    // ritaglio all'altezza del contenuto
+    const H=Math.max(1080, y+70), out=document.createElement("canvas"); out.width=W; out.height=H;
+    const ox=out.getContext("2d"); ox.fillStyle="#f3f5f1"; ox.fillRect(0,0,W,H); ox.drawImage(c,0,0,W,H,0,0,W,H);
+    return {canvas:out, text:(d.name||"Prodotto")+": "+(s10==null?"dati mancanti":s10.toLocaleString("it-IT")+"/10 – "+{g:"Va bene",a:"Discreto",r:"Da limitare"}[cls])+" (Semaforo Etichette)"};
+  }
+  function roundRect(x,X,Y,w,h,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
+  $("shareBtn").onclick=async()=>{
+    const d=read(); if(evaluate(d).score==null){ $("vsub").textContent="Inserisci almeno un valore per condividere."; return; }
+    const r=shareCard(), url=r.canvas.toDataURL("image/png");
+    const fname=((d.name||"prodotto").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"prodotto")+".png";
+    if(window.ShareBridge && ShareBridge.shareImage(fname, url.split(",")[1], r.text)) return;
+    try{ const blob=await (await fetch(url)).blob(); const file=new File([blob],fname,{type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], text:r.text}); return; } }catch(e){}
+    const a2=document.createElement("a"); a2.href=url; a2.download=fname; document.body.appendChild(a2); a2.click(); a2.remove();
+  };
+  window.__shareCard=shareCard;
+
+  // --- backup ---
+  function backupJSON(){ return JSON.stringify({app:"semaforo-etichette", formato:1, esportato:new Date().toISOString(), prodotti:loadSaved()}, null, 1); }
+  $("bkExport").onclick=()=>{
+    const n=loadSaved().length;
+    if(!n){ $("bkNote").textContent="Non ci sono prodotti da esportare."; return; }
+    const name="semaforo-backup-"+new Date().toISOString().slice(0,10)+".json", txt=backupJSON();
+    if(window.ShareBridge && ShareBridge.shareTextFile(name, txt, "application/json")){ $("bkNote").textContent="Backup di "+n+" prodotti pronto: scegli dove salvarlo (Drive, File, email…)."; return; }
+    const a2=document.createElement("a"); a2.href=URL.createObjectURL(new Blob([txt],{type:"application/json"})); a2.download=name; document.body.appendChild(a2); a2.click(); a2.remove();
+    $("bkNote").textContent="Backup di "+n+" prodotti scaricato.";
+  };
+  $("bkImport").onclick=()=>{ $("bkFile").value=""; $("bkFile").click(); };
+  $("bkFile").onchange=async()=>{
+    const f=$("bkFile").files && $("bkFile").files[0]; if(!f) return;
+    let data=null; try{ data=JSON.parse(await f.text()); }catch(e){}
+    const items = data && Array.isArray(data.prodotti) ? data.prodotti : (Array.isArray(data) ? data : null);
+    if(!items){ $("bkNote").textContent="Questo file non è un backup di Semaforo Etichette."; return; }
+    const cur=loadSaved(); let added=0, updated=0, skipped=0;
+    items.forEach(p=>{
+      if(!p || typeof p!=="object" || evaluate(p).score==null){ skipped++; return; }
+      const clean={}; ["id","name","type","mode","cat","code","kcal","fat","sat","carb","sugar","fibre","prot","salt","updated","off"].forEach(k=>{ if(p[k]!==undefined) clean[k]=p[k]; });
+      ["kcal","fat","sat","carb","sugar","fibre","prot","salt"].forEach(k=>{ const v=clean[k]; clean[k]= (typeof v==="number" && isFinite(v) && v>=0) ? v : null; });
+      clean.name=String(clean.name||"Senza nome").slice(0,120); clean.cat=CATS.includes(clean.cat)?clean.cat:""; clean.type=clean.type==="drink"?"drink":"food";
+      const i=cur.findIndex(x=>(clean.id && x.id===clean.id) || (clean.code && x.code===clean.code));
+      if(i>=0){ if((clean.updated||0)>(cur[i].updated||0)){ cur[i]=Object.assign({}, cur[i], clean, {id:cur[i].id}); updated++; } else skipped++; }
+      else { if(!clean.id) clean.id="p"+Date.now()+"_"+added; cur.push(clean); added++; }
+    });
+    storeSaved(cur); renderSaved();
+    $("bkNote").textContent="Importati "+added+" prodotti nuovi"+(updated?", aggiornati "+updated:"")+(skipped?", saltati "+skipped+" (già presenti o senza valori)":"")+".";
+  };
+
   $("save").onclick=()=>{
     if(!upsert()) $("vsub").textContent="Inserisci almeno un valore prima di salvare.";
   };
@@ -524,7 +671,8 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       st.textContent = camMode==="barcode" ? "Inquadra il codice a barre." : "Inquadra la tabella dei valori nutrizionali.";
       if(camMode==="barcode"){ clearInterval(scanTimer); scanTimer=setInterval(scanTick, 250); }
     }
-    $("photoBtn").onclick=()=>open("label");
+    function preload(){ try{ PaddleOCR.warm().catch(()=>{}); }catch(e){} }
+    $("photoBtn").onclick=()=>{ preload(); open("label"); };
     $("scanBtn").onclick=()=>{ pending=null; open("barcode"); };
     function scanTick(){
       if(cam.hidden || camMode!=="barcode" || scanBusy || !video.videoWidth) return;
@@ -551,7 +699,7 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       try{
         const r=await Barcode.lookup(code, ctl.signal);
         if(r.found && r.hasValues){
-          pending={code, drink:r.drink, name:r.name, off:{state:"found", ref:r.values}};
+          pending={code, drink:r.drink, name:r.name, cat:r.cat, off:{state:"found", ref:r.values}};
           st.className="status"; st.textContent="Trovato: "+(r.name||code)+".";
           openReview(r.values, ["valori presi da Open Food Facts, un database compilato dagli utenti: confrontali con la confezione"], null, r.name, "Open Food Facts · codice "+code);
           return true;
@@ -614,7 +762,8 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
 
     // lettura: PaddleOCR trova le scritte, poi label.js abbina voci e numeri e controlla i conti
     async function runOCR(raw,prog){
-      await PaddleOCR.init(t=>{ if($("busyTxt")) $("busyTxt").textContent=t; });
+      if($("busyTxt")) $("busyTxt").textContent="Preparo la lettura…";
+      await PaddleOCR.warm();
       if($("busyTxt")) $("busyTxt").textContent="Sto leggendo l'etichetta…";
       const lines=await PaddleOCR.read(raw, f=>prog&&prog(f));
       const text=lines.map(l=>l.text).join("\n");
@@ -638,6 +787,11 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       nf.innerHTML='<label for="rv_name">Nome prodotto <em>(facoltativo)</em></label><input type="text" id="rv_name" placeholder="es. Bresaola Dal Salumiere">';
       box.appendChild(nf);
       $("rv_name").value = name || (pending && pending.name) || "";
+      const cf=document.createElement("div"); cf.className="f rvName";
+      cf.innerHTML='<label for="rv_cat">Categoria</label><select id="rv_cat"><option value="">— scegli —</option></select>';
+      box.appendChild(cf);
+      CATS.forEach(c=>{ const o=document.createElement("option"); o.value=c; o.textContent=c; $("rv_cat").appendChild(o); });
+      $("rv_cat").value = (pending && pending.cat) || ((pending && (pending.drink||pending.isDrinkText)) ? "Bevande" : "");
       RV.forEach(([k,label,u])=>{
         const f=document.createElement("div"); f.className="f"+(v[k]==null?" miss":"");
         const id="rv_"+k;
@@ -687,7 +841,8 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       const offInfo = pending && pending.code && pending.off ? {state:pending.off.state, ref:pending.off.ref||null} : null;
       const shotUrl = pending && pending.photoUrl || null;
       delete $("rvOffChk").dataset.touched;
-      fill({name:nm, code: pending && pending.code || null, off: offInfo, type:ty, mode:$("mode").value, kcal:val("kcal"), fat:val("fat"), sat:val("sat"), carb:val("carb"), sugar:val("sugar"), fibre:val("fibre"), prot:val("prot"), salt:val("salt")});
+      const catSel=$("rv_cat") ? $("rv_cat").value : "";
+      fill({name:nm, cat:catSel, code: pending && pending.code || null, off: offInfo, type:ty, mode:$("mode").value, kcal:val("kcal"), fat:val("fat"), sat:val("sat"), carb:val("carb"), sugar:val("sugar"), fibre:val("fibre"), prot:val("prot"), salt:val("salt")});
       $("exNote").hidden=true; closeReview(); pending=null;
       const ok=upsert();
       st.className="status"; st.textContent= ok ? "Prodotto salvato. Se modifichi i valori qui sotto, il salvataggio si aggiorna da solo." : "Valori inseriti. Inseriscine almeno uno per salvare.";
@@ -707,7 +862,9 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
       await processImage(c);
     };
     // foto dalla galleria: si legge tutta l'immagine
-    $("galleryBtn").onclick=()=>{ $("gallery").value=""; $("gallery").click(); };
+    $("galleryBtn").onclick=()=>{ preload(); $("gallery").value=""; $("gallery").click(); };
+    // a riposo, poco dopo l'avvio, preparo comunque il motore di lettura
+    setTimeout(()=>{ (window.requestIdleCallback||setTimeout)(preload); }, 2500);
     $("gallery").onchange=async()=>{
       const f=$("gallery").files && $("gallery").files[0]; if(!f) return;
       st.className="status"; st.textContent="Apro la foto…";
@@ -748,12 +905,13 @@ td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowr
     }
   })();
   // account Open Food Facts
-  function renderOffAccount(){ const a=OFF.account(); $("offIn").hidden=!a; $("offForm").hidden=!!a; if(a){ $("offUser").textContent=a.user; $("offMine").href=OFF.editorUrl(a.user); } updateOffBtn(); }
+  function renderOffAccount(){ const a=OFF.account(); $("offIn").hidden=!a; $("offForm").hidden=!!a; if(a){ $("offUser").textContent=a.user+(OFF.isSecure()?" 🔒":""); $("offMine").href=OFF.editorUrl(a.user); } updateOffBtn(); }
   $("offForm").addEventListener("submit",e=>{ e.preventDefault();
     const u=$("offU").value.trim(), pw=$("offP").value;
     if(!u || !pw){ $("offU").focus(); return; }
     if(/@/.test(u)){ $("offU").value=""; $("offU").placeholder="serve il nome utente, non l'email"; $("offU").focus(); return; }
-    OFF.setAccount(u,pw); $("offP").value=""; renderOffAccount();
+    if(!OFF.setAccount(u,pw)){ $("offChk").textContent="Non riesco a salvare l'account su questo telefono."; return; }
+    $("offP").value=""; renderOffAccount();
     $("offChk").textContent="Controllo l'account…";
     OFF.checkAccount(u,pw).then(ok=>{
       $("offChk").textContent = ok===true ? "✓ Open Food Facts ha accettato nome utente e password." : ok===false ? "⚠ Open Food Facts rifiuta nome utente o password: scollega e reinserisci (serve il nome utente, non l'email)." : "Non sono riuscito a verificare l'account ora: lo controllo al primo invio.";

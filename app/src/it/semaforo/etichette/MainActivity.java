@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -17,8 +18,12 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 
 import java.io.InputStream;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,6 +32,7 @@ public class MainActivity extends Activity {
     private static final String BASE = "https://" + HOST + "/";
     private static final int REQ_CAMERA = 7;
     private static final int REQ_FILE = 8;
+    private static final int BAR = Color.parseColor("#1d4e5f");
     private android.webkit.ValueCallback<Uri[]> fileCb;
 
     private WebView web;
@@ -36,11 +42,26 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        if (Build.VERSION.SDK_INT >= 21) {
-            getWindow().setStatusBarColor(Color.parseColor("#1d4e5f"));
-        }
+        if (Build.VERSION.SDK_INT >= 21) getWindow().setStatusBarColor(BAR);
+
+        // Contenitore: su Android 15+ l'app disegna sotto le barre di sistema (edge-to-edge),
+        // quindi lascio spazio per barra di stato, barra di navigazione e tastiera.
+        final FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(BAR);
         web = new WebView(this);
-        setContentView(web);
+        root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        if (Build.VERSION.SDK_INT >= 35) {
+            root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @SuppressWarnings("deprecation")
+                public WindowInsets onApplyWindowInsets(View v, WindowInsets in) {
+                    // le "system window insets" comprendono barre di sistema e tastiera
+                    v.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(),
+                            in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+                    return in.consumeSystemWindowInsets();
+                }
+            });
+        }
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -50,6 +71,8 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
         web.addJavascriptInterface(new OffBridge(web), "OffBridge");
+        web.addJavascriptInterface(new SecureStore(this), "SecureStore");
+        web.addJavascriptInterface(new ShareBridge(this), "ShareBridge");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -84,11 +107,18 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
+                boolean images = true;
+                String[] acc = params != null ? params.getAcceptTypes() : null;
+                if (acc != null) for (String a : acc) if (a != null && (a.contains("json") || a.contains("text"))) images = false;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("image/*");
+                if (images) i.setType("image/*");
+                else {
+                    i.setType("*/*");
+                    i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain", "application/octet-stream"});
+                }
                 try {
-                    startActivityForResult(Intent.createChooser(i, "Scegli la foto dell'etichetta"), REQ_FILE);
+                    startActivityForResult(Intent.createChooser(i, images ? "Scegli la foto dell'etichetta" : "Scegli il file di backup"), REQ_FILE);
                 } catch (Exception e) {
                     fileCb = null;
                     cb.onReceiveValue(null);
@@ -116,8 +146,42 @@ public class MainActivity extends Activity {
             }
         });
 
+        registerPredictiveBack();
+
         if (state != null) web.restoreState(state);
         else web.loadUrl(BASE + "index.html");
+    }
+
+    // Android 16 (target 36): il tasto/gesto indietro arriva tramite OnBackInvokedCallback.
+    // Registrato per riflessione per non dipendere da librerie esterne; su Android 13-15 resta onBackPressed.
+    private void registerPredictiveBack() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        try {
+            final Class<?> cbIface = Class.forName("android.window.OnBackInvokedCallback");
+            Object cb = Proxy.newProxyInstance(getClassLoader(), new Class<?>[]{cbIface}, new InvocationHandler() {
+                public Object invoke(Object proxy, Method m, Object[] args) {
+                    String n = m.getName();
+                    if ("onBackInvoked".equals(n)) { runOnUiThread(new Runnable() { public void run() { handleBack(); } }); return null; }
+                    if ("hashCode".equals(n)) return System.identityHashCode(proxy);
+                    if ("equals".equals(n)) return proxy == args[0];
+                    if ("toString".equals(n)) return "SemaforoBack";
+                    return null;
+                }
+            });
+            Object dispatcher = Activity.class.getMethod("getOnBackInvokedDispatcher").invoke(this);
+            Class<?> dispIface = Class.forName("android.window.OnBackInvokedDispatcher");
+            dispIface.getMethod("registerOnBackInvokedCallback", int.class, cbIface).invoke(dispatcher, 0, cb);
+        } catch (Throwable ignored) {}
+    }
+
+    private void handleBack() {
+        web.evaluateJavascript("window.__back && window.__back()", new android.webkit.ValueCallback<String>() {
+            public void onReceiveValue(String v) {
+                if (!"true".equals(v)) {
+                    if (web.canGoBack()) web.goBack(); else finish();
+                }
+            }
+        });
     }
 
     private boolean hasCamera() {
@@ -173,15 +237,7 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onBackPressed() {
-        web.evaluateJavascript("window.__back && window.__back()", new android.webkit.ValueCallback<String>() {
-            public void onReceiveValue(String v) {
-                if (!"true".equals(v)) {
-                    if (web.canGoBack()) web.goBack(); else finish();
-                }
-            }
-        });
-    }
+    public void onBackPressed() { handleBack(); }
 
     @Override
     protected void onPause() {

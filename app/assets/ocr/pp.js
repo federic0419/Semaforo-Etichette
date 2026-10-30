@@ -103,5 +103,21 @@
     return lines;
   }
 
-  root.PaddleOCR = { init: init, read: read };
+  // carica i modelli e fa una prima esecuzione a vuoto, così la prima foto vera è veloce
+  var warming = null;
+  function warm() {
+    if (warming) return warming;
+    warming = (async function () {
+      await init();
+      var c = document.createElement("canvas"); c.width = 320; c.height = 96;
+      var x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, 320, 96); x.fillStyle = "#000"; x.font = "40px sans-serif"; x.fillText("Grassi 4,0 g", 10, 60);
+      await detect(c);
+      await recognize(c, { x0: 0, y0: 10, x1: 320, y1: 86 });
+      return true;
+    })();
+    warming.catch(function () { warming = null; });
+    return warming;
+  }
+
+  root.PaddleOCR = { init: init, read: read, warm: warm };
 })(window);

@@ -98,7 +98,17 @@
     var cats = p.categories_tags || [];
     var drink = cats.some(function (c) { return /^en:(beverages|waters|sodas|juices|plant-based-milks|milks)/.test(c); }) && !cats.some(function (c) { return /^en:(yogurts|cheeses)/.test(c); });
     var any = Object.keys(values).some(function (k) { return values[k] != null; });
-    return { found: true, hasValues: any, name: name, quantity: p.quantity || "", values: values, drink: drink, code: code };
+    // categoria dell'app a partire dalle categorie di Open Food Facts (la più specifica che riconosco)
+    var CMAP = [[/yogh?urts|milks|dairy-desserts|creams$/, "Yogurt e latte"], [/cheeses/, "Formaggi"],
+      [/hams|sausages|salamis|prepared-meats|meats|poultries|bresaola|cured/, "Salumi e carne"], [/fishes|seafood|tunas|salmons/, "Pesce"],
+      [/breads|breakfast-cereals|cereals|crackers|rusks|flours|mueslis|granolas/, "Pane, cereali e prima colazione"], [/pastas|rices|noodles|gnocchi/, "Pasta e riso"],
+      [/biscuits|cakes|chocolates|sweet-snacks|confectioneries|pastries|ice-creams|spreads|jams|honeys/, "Biscotti e dolci"],
+      [/salty-snacks|chips|crisps|appetizers|nuts/, "Snack salati"], [/beverages|waters|sodas|juices|teas|coffees/, "Bevande"],
+      [/meals|pizzas|soups|sandwiches|ready/, "Piatti pronti"], [/vegetables|legumes|fruits|plant-based-foods$|meat-alternatives|tofu/, "Frutta, verdura e legumi"],
+      [/sauces|condiments|oils|vinegars|dressings|spices|salts$/, "Condimenti e salse"]];
+    var cat = "";
+    for (var ci = cats.length - 1; ci >= 0 && !cat; ci--) for (var mi = 0; mi < CMAP.length; mi++) if (CMAP[mi][0].test(cats[ci])) { cat = CMAP[mi][1]; break; }
+    return { found: true, hasValues: any, name: name, quantity: p.quantity || "", values: values, drink: drink, cat: cat, code: code };
   }
 
   root.Barcode = { decode: decode, lookup: lookup, validEAN: validEAN };

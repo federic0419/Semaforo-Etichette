@@ -9,9 +9,35 @@
 
   root.__offCb = function (id, status, body) { var w = waiting[id]; if (!w) return; delete waiting[id]; w({ status: status, body: body }); };
 
-  function account() { try { var a = JSON.parse(localStorage.getItem(KEY) || "null"); return a && a.user && a.pass ? a : null; } catch (e) { return null; } }
-  function setAccount(user, pass) { try { localStorage.setItem(KEY, JSON.stringify({ user: user, pass: pass })); return true; } catch (e) { return false; } }
-  function clearAccount() { try { localStorage.removeItem(KEY); } catch (e) {} }
+  // Password nel portachiavi sicuro di Android (SecureStore, cifrata con chiave del Keystore).
+  // Il nome utente non è segreto e resta nella memoria normale. Senza SecureStore (anteprima, Android 5) si usa la memoria normale.
+  var USER_KEY = "semaforo-off-user", PASS = "off_password";
+  function secure() { try { return root.SecureStore && root.SecureStore.available() ? root.SecureStore : null; } catch (e) { return null; } }
+  function migrate() {
+    try {
+      var old = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (!old || !old.user || !old.pass) return;
+      var ss = secure();
+      if (ss && ss.set(PASS, old.pass)) { localStorage.setItem(USER_KEY, old.user); localStorage.removeItem(KEY); }
+    } catch (e) {}
+  }
+  function account() {
+    migrate();
+    try {
+      var ss = secure();
+      if (ss) { var u = localStorage.getItem(USER_KEY), p = u ? ss.get(PASS) : ""; return u && p ? { user: u, pass: p, secure: true } : null; }
+      var a = JSON.parse(localStorage.getItem(KEY) || "null"); return a && a.user && a.pass ? a : null;
+    } catch (e) { return null; }
+  }
+  function setAccount(user, pass) {
+    try {
+      var ss = secure();
+      if (ss) { if (!ss.set(PASS, pass)) return false; localStorage.setItem(USER_KEY, user); localStorage.removeItem(KEY); return true; }
+      localStorage.setItem(KEY, JSON.stringify({ user: user, pass: pass })); return true;
+    } catch (e) { return false; }
+  }
+  function clearAccount() { try { localStorage.removeItem(KEY); localStorage.removeItem(USER_KEY); var ss = secure(); if (ss) ss.remove(PASS); } catch (e) {} }
+  function isSecure() { return !!secure(); }
 
   function viaBridge(method, args) {
     return new Promise(function (resolve) {
@@ -110,5 +136,5 @@
   function productUrl(code) { return "https://it.openfoodfacts.org/product/" + encodeURIComponent(code); }
   function editorUrl(user) { return "https://it.openfoodfacts.org/editor/" + encodeURIComponent(user); }
 
-  root.OFF = { verify: verify, checkAccount: checkAccount, productUrl: productUrl, editorUrl: editorUrl, account: account, setAccount: setAccount, clearAccount: clearAccount, changes: changes, saveProduct: saveProduct, uploadNutritionPhoto: uploadNutritionPhoto, BASE: BASE };
+  root.OFF = { isSecure: isSecure, verify: verify, checkAccount: checkAccount, productUrl: productUrl, editorUrl: editorUrl, account: account, setAccount: setAccount, clearAccount: clearAccount, changes: changes, saveProduct: saveProduct, uploadNutritionPhoto: uploadNutritionPhoto, BASE: BASE };
 })(window);
